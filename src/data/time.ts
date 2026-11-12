@@ -3,6 +3,7 @@ import { RoomDoc } from '../types/admin';
 export const QUEUE_ALIVE_WINDOW_MS = 25_000;
 export const ROOM_STALE_WAITING_MS = 10 * 60_000;
 export const ROOM_STALE_ACTIVE_MS = 30 * 60_000;
+export const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 export function formatTimeAgoVi(updatedAtMs: number, nowMs: number = Date.now()): string {
   if (!updatedAtMs || !Number.isFinite(updatedAtMs)) return 'chưa rõ';
@@ -33,4 +34,14 @@ export function isRoomLikelyStale(
     return age > ROOM_STALE_WAITING_MS;
   }
   return age > ROOM_STALE_ACTIVE_MS;
+}
+
+export function isOldClosedRoom(
+  room: Pick<RoomDoc, 'status' | 'phase' | 'updatedAtMs'>,
+  days = 7,
+  nowMs: number = Date.now()
+): boolean {
+  if (room.status !== 'CLOSED' && room.phase !== 'GAME_OVER') return false;
+  if (!room.updatedAtMs || !Number.isFinite(room.updatedAtMs)) return false;
+  return nowMs - room.updatedAtMs >= days * MS_PER_DAY;
 }

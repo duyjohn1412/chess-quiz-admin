@@ -2,8 +2,14 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Chess, Square } from 'chess.js';
 import { Chessboard } from 'react-chessboard';
 import { CARD_CATALOG, getCardMeta } from '../data/cards';
-import { formatTimeAgoVi, isRoomLikelyStale } from '../data/time';
-import { cleanupStaleRooms, closeOrDeleteRoom, sendMatchCommand, subscribeRoomLive } from '../services/adminApi';
+import { formatTimeAgoVi, isOldClosedRoom, isRoomLikelyStale } from '../data/time';
+import {
+  cleanupOldClosedRooms,
+  cleanupStaleRooms,
+  closeOrDeleteRoom,
+  sendMatchCommand,
+  subscribeRoomLive,
+} from '../services/adminApi';
 import {
   AdminCommand,
   AdminGameSnapshot,
@@ -52,6 +58,19 @@ export const LiveMatchPanel: React.FC<LiveMatchPanelProps> = ({ rooms, onToast }
   const [giftLevel, setGiftLevel] = useState<CardLevel>(4);
   const [customClockSec, setCustomClockSec] = useState<number>(30);
   const [busyCmd, setBusyCmd] = useState(false);
+  const [boardWidth, setBoardWidth] = useState<number>(360);
+
+  useEffect(() => {
+    const updateWidth = () => {
+      if (typeof window === 'undefined') return;
+      const w = window.innerWidth;
+      const maxAllowed = Math.min(360, Math.max(260, w - 48));
+      setBoardWidth(maxAllowed);
+    };
+    updateWidth();
+    window.addEventListener('resize', updateWidth);
+    return () => window.removeEventListener('resize', updateWidth);
+  }, []);
 
   const filteredRooms = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -74,6 +93,11 @@ export const LiveMatchPanel: React.FC<LiveMatchPanelProps> = ({ rooms, onToast }
 
   const staleRooms = useMemo(
     () => rooms.filter((r) => isRoomLikelyStale(r, nowTick)),
+    [rooms, nowTick]
+  );
+
+  const oldClosedRooms = useMemo(
+    () => rooms.filter((r) => isOldClosedRoom(r, 7, nowTick)),
     [rooms, nowTick]
   );
 
@@ -280,26 +304,49 @@ export const LiveMatchPanel: React.FC<LiveMatchPanelProps> = ({ rooms, onToast }
       <aside className="panel col" style={{ gap: '0.65rem' }}>
         <div className="between">
           <h2 style={{ margin: 0, fontSize: '1.05rem' }}>🎥 Danh sách phòng ({filteredRooms.length})</h2>
-          {staleRooms.length > 0 && (
-            <button
-              type="button"
-              className="btn-xs btn-danger"
-              onClick={async () => {
-                if (!confirm(`Xóa ${staleRooms.length} phòng treo cũ không còn hoạt động khỏi Firestore?`)) return;
-                try {
-                  const n = await cleanupStaleRooms(staleRooms);
-                  if (selectedCode && staleRooms.some((s) => s.code === selectedCode)) {
-                    setSelectedCode(null);
+          <div className="row" style={{ gap: '0.25rem' }}>
+            {staleRooms.length > 0 && (
+              <button
+                type="button"
+                className="btn-xs btn-danger"
+                onClick={async () => {
+                  if (!confirm(`Xóa ${staleRooms.length} phòng treo cũ không còn hoạt động khỏi Firestore?`)) return;
+                  try {
+                    const n = await cleanupStaleRooms(staleRooms);
+                    if (selectedCode && staleRooms.some((s) => s.code === selectedCode)) {
+                      setSelectedCode(null);
+                    }
+                    onToast(`Đã dọn ${n} phòng treo cũ`);
+                  } catch (e) {
+                    onToast(`Lỗi dọn phòng: ${e instanceof Error ? e.message : String(e)}`, true);
                   }
-                  onToast(`Đã dọn ${n} phòng treo cũ`);
-                } catch (e) {
-                  onToast(`Lỗi dọn phòng: ${e instanceof Error ? e.message : String(e)}`, true);
-                }
-              }}
-            >
-              🧹 Dọn {staleRooms.length} treo
-            </button>
-          )}
+                }}
+              >
+                🧹 Dọn {staleRooms.length} treo
+              </button>
+            )}
+            {oldClosedRooms.length > 0 && (
+              <button
+                type="button"
+                className="btn-xs"
+                style={{ borderColor: '#f59e0b', color: '#fbbf24' }}
+                onClick={async () => {
+                  if (!confirm(`Xóa ${oldClosedRooms.length} phòng đã kết thúc > 7 ngày khỏi Firestore để dọn sạch bộ nhớ?`)) return;
+                  try {
+                    const n = await cleanupOldClosedRooms(oldClosedRooms, 7);
+                    if (selectedCode && oldClosedRooms.some((s) => s.code === selectedCode)) {
+                      setSelectedCode(null);
+                    }
+                    onToast(`Đã dọn ${n} phòng đóng > 7 ngày`);
+                  } catch (e) {
+                    onToast(`Lỗi dọn phòng cũ: ${e instanceof Error ? e.message : String(e)}`, true);
+                  }
+                }}
+              >
+                🧹 Dọn {oldClosedRooms.length} phòng &gt;7d
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="row">
@@ -427,7 +474,7 @@ export const LiveMatchPanel: React.FC<LiveMatchPanelProps> = ({ rooms, onToast }
                     <Chessboard
                       id="admin-live-board"
                       position={liveSnap.fen}
-                      boardWidth={360}
+                      boardWidth={boardWidth}
                       boardOrientation={orientation}
                       arePiecesDraggable={false}
                       onSquareClick={handleSquareClick}

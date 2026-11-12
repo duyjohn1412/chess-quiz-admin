@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CARD_CATALOG, getCardMeta } from '../../src/data/cards';
 import { buildCreatePlayerDocument, clampElo, getRankTier, sanitizePlayerEdit } from '../../src/data/rank';
-import { formatTimeAgoVi, isQueueTicketAlive, isRoomLikelyStale } from '../../src/data/time';
+import { formatTimeAgoVi, isOldClosedRoom, isQueueTicketAlive, isRoomLikelyStale, MS_PER_DAY } from '../../src/data/time';
 
 describe('Admin helpers & invariants', () => {
   it('clampElo và getRankTier chuẩn theo ngưỡng hạng', () => {
@@ -68,5 +68,15 @@ describe('Admin helpers & invariants', () => {
     expect(isRoomLikelyStale({ status: 'WAITING', phase: 'LOBBY', updatedAtMs: now - 15 * 60_000 }, now)).toBe(true);
     expect(isRoomLikelyStale({ status: 'ACTIVE', phase: 'PLAYING', updatedAtMs: now - 5 * 60_000 }, now)).toBe(false);
     expect(isRoomLikelyStale({ status: 'CLOSED', phase: 'GAME_OVER', updatedAtMs: now - 99 * 60_000 }, now)).toBe(false);
+  });
+
+  it('isOldClosedRoom phát hiện phòng đã kết thúc quá hạn ngày', () => {
+    const now = 1_000_000_000;
+    // Phòng ACTIVE/WAITING không được coi là closed
+    expect(isOldClosedRoom({ status: 'ACTIVE', phase: 'PLAYING', updatedAtMs: now - 10 * MS_PER_DAY }, 7, now)).toBe(false);
+    // Phòng CLOSED mới kết thúc 3 ngày
+    expect(isOldClosedRoom({ status: 'CLOSED', phase: 'GAME_OVER', updatedAtMs: now - 3 * MS_PER_DAY }, 7, now)).toBe(false);
+    // Phòng CLOSED đã kết thúc 8 ngày
+    expect(isOldClosedRoom({ status: 'CLOSED', phase: 'GAME_OVER', updatedAtMs: now - 8 * MS_PER_DAY }, 7, now)).toBe(true);
   });
 });

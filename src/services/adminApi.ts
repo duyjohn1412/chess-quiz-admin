@@ -354,6 +354,18 @@ export async function cleanupStaleRooms(staleRooms: RoomDoc[]): Promise<number> 
   return staleRooms.length;
 }
 
+export async function cleanupOldClosedRooms(roomsToDelete: RoomDoc[], days = 7): Promise<number> {
+  if (roomsToDelete.length === 0) return 0;
+  const { db } = getAdminFirebase();
+  await Promise.all(roomsToDelete.map((r) => deleteDoc(doc(db, 'rooms', r.code))));
+  await logAdminAction(
+    'ROOMS_CLEANUP_OLD_CLOSED',
+    `${roomsToDelete.length} phòng`,
+    `Dọn ${roomsToDelete.length} phòng đã kết thúc > ${days} ngày: ${roomsToDelete.map((r) => r.code).slice(0, 8).join(', ')}`
+  );
+  return roomsToDelete.length;
+}
+
 export async function cleanupStaleQueue(staleTickets: QueueDoc[]): Promise<number> {
   if (staleTickets.length === 0) return 0;
   const { db } = getAdminFirebase();

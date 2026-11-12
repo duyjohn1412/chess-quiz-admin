@@ -91,6 +91,61 @@ export const PlayersPanel: React.FC<PlayersPanelProps> = ({ onToast }) => {
     }
   };
 
+  const handleExportCsv = () => {
+    if (filtered.length === 0) {
+      onToast('Không có người chơi nào để xuất', true);
+      return;
+    }
+    const headers = [
+      'STT',
+      'Tên người chơi',
+      'UID',
+      'Elo',
+      'Hạng',
+      'Đỉnh Elo',
+      'Thắng',
+      'Hòa',
+      'Thua',
+      'Tổng trận',
+      'Chuỗi thắng',
+      'Trên BXH',
+      'Mã trận cuối',
+      'Cập nhật lần cuối',
+    ];
+    const rows = filtered.map((p, idx) => {
+      const tier = getRankTier(p.elo);
+      const updatedStr = p.updatedAtMs ? new Date(p.updatedAtMs).toLocaleString('vi-VN') : '';
+      return [
+        idx + 1,
+        `"${p.name.replace(/"/g, '""')}"`,
+        `"${p.uid}"`,
+        p.elo,
+        `"${tier.label}"`,
+        p.bestElo,
+        p.wins,
+        p.draws,
+        p.losses,
+        p.gamesPlayed,
+        p.streak,
+        p.ranked ? 'Có' : 'Không',
+        `"${p.lastMatchId || ''}"`,
+        `"${updatedStr}"`,
+      ].join(',');
+    });
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const nowStr = new Date().toISOString().slice(0, 10);
+    a.download = `chess_quiz_players_${nowStr}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    onToast(`Đã xuất ${filtered.length} người chơi sang file CSV`);
+  };
+
   return (
     <div className="col" style={{ gap: '0.75rem' }}>
       <div className="panel between">
@@ -140,6 +195,14 @@ export const PlayersPanel: React.FC<PlayersPanelProps> = ({ onToast }) => {
             }
           >
             ➕ Tạo hồ sơ
+          </button>
+          <button
+            type="button"
+            className="btn-sm"
+            onClick={handleExportCsv}
+            title="Tải bảng danh sách người chơi dạng Excel/CSV"
+          >
+            📥 Xuất CSV
           </button>
           <button type="button" className="btn-sm" disabled={loading} onClick={() => void loadPlayers()}>
             {loading ? 'Đang tải…' : '🔄 Làm mới'}
