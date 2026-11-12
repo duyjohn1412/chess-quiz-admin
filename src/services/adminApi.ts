@@ -342,6 +342,30 @@ export async function deleteQueueTicket(uid: string): Promise<void> {
   await logAdminAction('QUEUE_DELETE', uid, 'Xóa vé khỏi hàng chờ');
 }
 
+export async function cleanupStaleRooms(staleRooms: RoomDoc[]): Promise<number> {
+  if (staleRooms.length === 0) return 0;
+  const { db } = getAdminFirebase();
+  await Promise.all(staleRooms.map((r) => deleteDoc(doc(db, 'rooms', r.code))));
+  await logAdminAction(
+    'ROOMS_CLEANUP_STALE',
+    `${staleRooms.length} phòng`,
+    `Dọn ${staleRooms.length} phòng treo cũ: ${staleRooms.map((r) => r.code).slice(0, 8).join(', ')}`
+  );
+  return staleRooms.length;
+}
+
+export async function cleanupStaleQueue(staleTickets: QueueDoc[]): Promise<number> {
+  if (staleTickets.length === 0) return 0;
+  const { db } = getAdminFirebase();
+  await Promise.all(staleTickets.map((q) => deleteDoc(doc(db, 'queue', q.uid))));
+  await logAdminAction(
+    'QUEUE_CLEANUP_STALE',
+    `${staleTickets.length} vé`,
+    `Dọn ${staleTickets.length} vé hàng chờ quá hạn (>25s)`
+  );
+  return staleTickets.length;
+}
+
 export function subscribeAdminLogs(
   onData: (logs: AdminLogDoc[]) => void,
   onError?: (err: Error) => void

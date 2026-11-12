@@ -2,7 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Chess, Square } from 'chess.js';
 import { Chessboard } from 'react-chessboard';
 import { CARD_CATALOG, getCardMeta } from '../data/cards';
-import { closeOrDeleteRoom, sendMatchCommand, subscribeRoomLive } from '../services/adminApi';
+import { formatTimeAgoVi, isRoomLikelyStale } from '../data/time';
+import { cleanupStaleRooms, closeOrDeleteRoom, sendMatchCommand, subscribeRoomLive } from '../services/adminApi';
 import {
   AdminCommand,
   AdminGameSnapshot,
@@ -69,6 +70,11 @@ export const LiveMatchPanel: React.FC<LiveMatchPanelProps> = ({ rooms, onToast }
   const selectedRoom = useMemo(
     () => rooms.find((r) => r.code === selectedCode) ?? null,
     [rooms, selectedCode]
+  );
+
+  const staleRooms = useMemo(
+    () => rooms.filter((r) => isRoomLikelyStale(r, nowTick)),
+    [rooms, nowTick]
   );
 
   // Tự chọn trận LIVE đầu tiên nếu chưa chọn
@@ -274,6 +280,26 @@ export const LiveMatchPanel: React.FC<LiveMatchPanelProps> = ({ rooms, onToast }
       <aside className="panel col" style={{ gap: '0.65rem' }}>
         <div className="between">
           <h2 style={{ margin: 0, fontSize: '1.05rem' }}>🎥 Danh sách phòng ({filteredRooms.length})</h2>
+          {staleRooms.length > 0 && (
+            <button
+              type="button"
+              className="btn-xs btn-danger"
+              onClick={async () => {
+                if (!confirm(`Xóa ${staleRooms.length} phòng treo cũ không còn hoạt động khỏi Firestore?`)) return;
+                try {
+                  const n = await cleanupStaleRooms(staleRooms);
+                  if (selectedCode && staleRooms.some((s) => s.code === selectedCode)) {
+                    setSelectedCode(null);
+                  }
+                  onToast(`Đã dọn ${n} phòng treo cũ`);
+                } catch (e) {
+                  onToast(`Lỗi dọn phòng: ${e instanceof Error ? e.message : String(e)}`, true);
+                }
+              }}
+            >
+              🧹 Dọn {staleRooms.length} treo
+            </button>
+          )}
         </div>
 
         <div className="row">
@@ -304,6 +330,7 @@ export const LiveMatchPanel: React.FC<LiveMatchPanelProps> = ({ rooms, onToast }
           ) : (
             filteredRooms.map((r) => {
               const active = r.code === selectedCode;
+              const stale = isRoomLikelyStale(r, nowTick);
               return (
                 <div
                   key={r.code}
@@ -319,16 +346,20 @@ export const LiveMatchPanel: React.FC<LiveMatchPanelProps> = ({ rooms, onToast }
                     <strong>{r.code}</strong>
                     <div className="row" style={{ gap: '0.25rem' }}>
                       <span className="badge">{r.isRanked ? '🏆 Ranked' : '🔑 Riêng'}</span>
-                      <span className={`badge ${r.status === 'ACTIVE' ? 'ok-badge' : r.status === 'CLOSED' ? 'muted' : ''}`}>
-                        {r.status}
-                      </span>
+                      {stale ? (
+                        <span className="badge danger-badge">💤 Treo cũ</span>
+                      ) : (
+                        <span className={`badge ${r.status === 'ACTIVE' ? 'ok-badge' : r.status === 'CLOSED' ? 'muted' : ''}`}>
+                          {r.status}
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div style={{ fontSize: '0.83rem' }}>
                     ⚪ {r.hostName} ({r.hostElo}) vs ⚫ {r.guestName ?? 'Đang chờ'} {r.guestElo ? `(${r.guestElo})` : ''}
                   </div>
                   <div className="between muted" style={{ fontSize: '0.76rem' }}>
-                    <span>{PHASE_VI[r.phase] ?? r.phase}</span>
+                    <span>{PHASE_VI[r.phase] ?? r.phase} • {formatTimeAgoVi(r.updatedAtMs, nowTick)}</span>
                     <span>{r.clockSeconds / 60}p • 👁 {r.spectatorUids.length}</span>
                   </div>
                 </div>
@@ -352,9 +383,12 @@ export const LiveMatchPanel: React.FC<LiveMatchPanelProps> = ({ rooms, onToast }
                   Phòng {selectedRoom.code} {selectedRoom.isRanked ? '🏆 Ranked' : '🔑 Phòng riêng'}
                 </h2>
                 <span className="badge">{PHASE_VI[liveSnap?.phase ?? selectedRoom.phase] ?? selectedRoom.phase}</span>
+                {liveSnap && !liveSnap.isFallbackP2View && (
+                  <span className="badge ok-badge">🟢 Host đang đồng bộ trực tiếp</span>
+                )}
                 {liveSnap?.isFallbackP2View && (
-                  <span className="badge" title="Host dùng phiên bản trước hoặc đang chờ WATCH_PING">
-                    Chế độ xem cơ bản
+                  <span className="badge danger-badge" title="Host đã tắt tab hoặc đang dùng bản cũ nên không trả lời WATCH_PING">
+                    Chế độ xem cơ bản (Host không phản hồi)
                   </span>
                 )}
               </div>

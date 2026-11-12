@@ -8,6 +8,7 @@ import {
   signInAdminWithGoogle,
   signOutAdmin,
 } from './config/firebase';
+import { isQueueTicketAlive } from './data/time';
 import { subscribeAdminLogs, subscribeQueue, subscribeRooms } from './services/adminApi';
 import { AdminLogDoc, QueueDoc, RoomDoc } from './types/admin';
 import { LiveMatchPanel } from './components/LiveMatchPanel';
@@ -129,6 +130,8 @@ export const App: React.FC = () => {
   }
 
   const liveCount = rooms.filter((r) => r.status !== 'CLOSED' && r.phase !== 'GAME_OVER').length;
+  const nowRef = Date.now();
+  const liveQueueCount = queue.filter((q) => isQueueTicketAlive(q.updatedAtMs, nowRef)).length;
 
   return (
     <main className="app-shell">
@@ -158,7 +161,7 @@ export const App: React.FC = () => {
             className={`btn-sm ${tab === 'queue' ? 'btn-primary' : ''}`}
             onClick={() => setTab('queue')}
           >
-            ⏳ Hàng chờ ({queue.length}) &amp; Nhật ký
+            ⏳ Hàng chờ ({liveQueueCount}/{queue.length}) &amp; Nhật ký
           </button>
           <button type="button" className="btn-sm btn-danger" onClick={() => void signOutAdmin()}>
             Đăng xuất

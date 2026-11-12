@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CARD_CATALOG, getCardMeta } from '../../src/data/cards';
 import { buildCreatePlayerDocument, clampElo, getRankTier, sanitizePlayerEdit } from '../../src/data/rank';
+import { formatTimeAgoVi, isQueueTicketAlive, isRoomLikelyStale } from '../../src/data/time';
 
 describe('Admin helpers & invariants', () => {
   it('clampElo và getRankTier chuẩn theo ngưỡng hạng', () => {
@@ -53,5 +54,19 @@ describe('Admin helpers & invariants', () => {
   it('có đủ 23 thẻ chiến thuật trong catalog', () => {
     expect(CARD_CATALOG).toHaveLength(23);
     expect(getCardMeta('q_flash').name).toBe('Flash');
+  });
+
+  it('formatTimeAgoVi, isQueueTicketAlive và isRoomLikelyStale tính đúng trạng thái treo', () => {
+    const now = 1_000_000_000;
+    expect(formatTimeAgoVi(now - 2_000, now)).toBe('vừa xong');
+    expect(formatTimeAgoVi(now - 35_000, now)).toBe('35 giây trước');
+    expect(formatTimeAgoVi(now - 180_000, now)).toBe('3 phút trước');
+
+    expect(isQueueTicketAlive(now - 10_000, now)).toBe(true);
+    expect(isQueueTicketAlive(now - 30_000, now)).toBe(false);
+
+    expect(isRoomLikelyStale({ status: 'WAITING', phase: 'LOBBY', updatedAtMs: now - 15 * 60_000 }, now)).toBe(true);
+    expect(isRoomLikelyStale({ status: 'ACTIVE', phase: 'PLAYING', updatedAtMs: now - 5 * 60_000 }, now)).toBe(false);
+    expect(isRoomLikelyStale({ status: 'CLOSED', phase: 'GAME_OVER', updatedAtMs: now - 99 * 60_000 }, now)).toBe(false);
   });
 });
