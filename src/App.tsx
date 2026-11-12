@@ -45,7 +45,9 @@ export const App: React.FC = () => {
     });
     return onAuthStateChanged(auth, (user) => {
       if (user && !isAuthorizedAdminUser(user)) {
-        setAuthError(`Tài khoản ${user.email ?? 'hiện tại'} không phải Admin được cấp phép.`);
+        if (!user.isAnonymous) {
+          setAuthError(`Tài khoản ${user.email ?? 'hiện tại'} không phải Admin được cấp phép.`);
+        }
         void signOutAdmin();
         setAdminUser(null);
       } else {

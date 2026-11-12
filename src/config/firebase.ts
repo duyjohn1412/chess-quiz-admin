@@ -1,4 +1,4 @@
-import { FirebaseApp, getApp, getApps, initializeApp } from 'firebase/app';
+import { FirebaseApp, getApps, initializeApp } from 'firebase/app';
 import {
   Auth,
   browserLocalPersistence,
@@ -14,6 +14,7 @@ import {
 import { Firestore, getFirestore } from 'firebase/firestore';
 
 export const ADMIN_ALLOWED_EMAIL = 'banhtrang1x23@gmail.com';
+export const ADMIN_APP_NAME = 'chess-quiz-admin';
 export const FIREBASE_DATABASE_ID = 'chess';
 export const FIREBASE_EDITION = 'enterprise' as const;
 
@@ -42,7 +43,8 @@ let cached: { app: FirebaseApp; auth: Auth; db: Firestore } | null = null;
 
 export function getAdminFirebase(): { app: FirebaseApp; auth: Auth; db: Firestore } {
   if (cached) return cached;
-  const app = getApps().length > 0 ? getApp() : initializeApp(FIREBASE_CONFIG);
+  const existing = getApps().find((a) => a.name === ADMIN_APP_NAME);
+  const app = existing ?? initializeApp(FIREBASE_CONFIG, ADMIN_APP_NAME);
   const auth = getAuth(app);
   void setPersistence(auth, browserLocalPersistence).catch(() => {});
   const db = getFirestore(app, FIREBASE_DATABASE_ID);
